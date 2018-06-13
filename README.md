@@ -1,18 +1,12 @@
 # Observations
 
-* Of the drug treatments, Capomulin and Ramicane show the most promise. Both decreased tumor volume, had markedly better survival rates, and had relatively less aggressive growth of metastatic sites compared to the other treatements.
+* Of the drug treatments, Capomulin shows the most promise. It decreased tumor volume, had markedly better survival rates, and had relatively less aggressive growth of metastatic sites compared to the other treatments.
 
-* Propriva has a markedly worse survival rate than the other drugs, despite not being noticeably worse in tumor growth or growth of metastatic sites.
+* Capomulin is also the most consistent of the treatments, as it has the smallest error bar and standard error of all the logged treatments.
 
-* The value of the metastatic sites count data point is worth exploring. Of the data points collected, it's the only one in which there's a clear differentiation between the 10 treatments. For the other data points, the treatments either track the placebo or break off showing some promise.
+* The value of the metastatic sites count data point is worth exploring further. Infubinol has a noteable better job of limiting metastatic sites than Ketapril and the placebo, however it has the worst survival rate of the four treatments.
 
-A few things I would work on with additional time:
-
-* One of the mice (g989) in the dataset was treated with multiple drugs. I would create deduplication logic which removes it.
-
-* Create some logic which always places placebo at the bottom.
-
-* Size up the plots and make them easier to read and to track the data points.
+For the other data points, the treatments either track the placebo or break off showing some promise.
 
 ```python
 #import dependencies
@@ -40,24 +34,14 @@ trial_data = trial_data.merge(drug_data, on='Mouse ID', how='left')
 
 print(trial_data.info())
 
-#extra entries (1906 instead or original 1893 because one of the mice is listed as being on multiple treatements)
+#isolate relevant data
+trial_data = trial_data[(trial_data['Drug']=='Capomulin') |
+                        (trial_data['Drug']=='Infubinol') |
+                        (trial_data['Drug']=='Ketapril') |
+                        (trial_data['Drug']=='Placebo')]
 
-tumor_volume_group = trial_data.groupby(['Drug', 'Timepoint'])['Tumor Volume (mm3)'].mean()
-tumor_volume = tumor_volume_group.to_frame()
-
-#confirming multiple mouse IDs
-mouse_counts = drug_data['Mouse ID'].value_counts()
-
-print(type(mouse_counts))
-
-#drop the duplicates
-#trial_data = trial_data[trial_data['Mouse ID'] != 'g989']
-
-#trial_data.reset_index()
-
-#print(trial_data.info())
-
-
+#reset the index
+trial_data = trial_data.reset_index(drop=True)
 ```
 
     <class 'pandas.core.frame.DataFrame'>
@@ -89,125 +73,97 @@ print(type(mouse_counts))
     dtypes: float64(1), int64(2), object(2)
     memory usage: 89.3+ KB
     None
-    <class 'pandas.core.series.Series'>
 
+
+
+```python
+def create_basic_scatter(field):
+    
+    #Creates a groupby object for mean of tumor sizes by drug and timepoint, then converts to DF
+    group = trial_data.groupby(['Drug', 'Timepoint'])[field].mean()
+    fieldmean = group.to_frame()
+
+    #Re-arranging the format of the multi-index DF for insertion into a scatter plot
+    fieldmean = fieldmean.unstack().transpose().reset_index(level=0, drop=True)
+
+    #Create data for x-axis (time) and labels (drug names)
+    timepoint = fieldmean.index
+    drugs = fieldmean.columns
+
+    #standard error calculation for error bar
+    standard_error=fieldmean.sem()
+
+    #marker array to cycle through in loop for data point differentiation
+    markers = ['o', 's', 'x', 'v']
+
+    #loop through each unique drug in drug name, and create scatter plot w/ error bars
+    for x in range(len(drugs)):
+
+        volume_line=fieldmean.iloc[:, x]
+
+        marker_position = (x)%4
+    
+        plt.errorbar(timepoint, volume_line, yerr=standard_error[x], marker=markers[marker_position], linestyle='dashed')
+
+    #grid
+    plt.grid(linestyle='dashed')
+
+    #anchors legend to outside of the chart
+    plt.legend(bbox_to_anchor=(1.04,1), loc="upper left")
+
+    #limits
+    plt.xlim(min(timepoint)-5, max(timepoint)+5)
+
+```
 
 # Scatter plot, tumor volume for each treatment
 
 
 ```python
-#Creates a groupby object for mean of tumor sizes by drug and timepoint, then converts to DF
-tumor_volume_group = trial_data.groupby(['Drug', 'Timepoint'])['Tumor Volume (mm3)'].mean()
-tumor_volume = tumor_volume_group.to_frame()
-
-#Re-arranging the format of the multi-index DF for insertion into a scatter plot
-tumor_volume = tumor_volume.unstack().transpose().reset_index(level=0, drop=True)
-
-#Create data for x-axis (time) and labels (drug names)
-timepoint = tumor_volume.index
-drugs = tumor_volume.columns
-
-#standard error calculation for error bar
-standard_error=tumor_volume.sem()
-
-#marker array to cycle through in loop for data point differentiation
-markers = ['o', 's', 'x', 'v']
-
-#loop through each unique drug in drug name, and create scatter plot w/ error bars
-for x in range(len(drugs)):
-
-    volume_line=tumor_volume.iloc[:, x]
-
-    marker_position = (x)%4
-    
-    plt.errorbar(timepoint, volume_line, yerr=standard_error, marker=markers[marker_position], linestyle='dashed')
+create_basic_scatter('Tumor Volume (mm3)')
 
 #title
 plt.title('Tumor Volume During Treatment')
 
-#grid
-plt.grid(linestyle='dashed')
-
-#limits
-plt.xlim(min(timepoint)-5, max(timepoint)+5)
-
 #axes labels
 plt.xlabel('Time (Days)')
-plt.ylabel('Tumor Size (mm)')
-
-#anchors legend to outside of the chart
-plt.legend(bbox_to_anchor=(1.04,1), loc="upper left")
+plt.ylabel('Tumor Size (mm3)')
 
 #show plot
 plt.show()
-
-#need to figure out how to resize for better visibility
 ```
 
 
-![png](output_4_0.png)
+![png](output_5_0.png)
 
 
 # Scatter plot, number of metastatic sites for each treatment
 
 
 ```python
-#Creates a groupby object for mean of tumor sizes by drug and timepoint, then converts to DF
-metastatic_group = trial_data.groupby(['Drug', 'Timepoint'])['Metastatic Sites'].mean()
-metastatic = metastatic_group.to_frame()
+create_basic_scatter('Metastatic Sites')
 
-#Re-arranging the format of the multi-index DF for insertion into a scatter plot
-metastatic = metastatic.unstack().transpose().reset_index(level=0, drop=True)
-
-#Create data for x-axis (time) and labels (drug names)
-timepoint = metastatic.index
-drugs = metastatic.columns
-
-#standard error calculation for error bar
-standard_error=metastatic.sem()
-
-#marker array to cycle through in loop for data point differentiation
-markers = ['o', 's', 'x', 'v']
-
-#loop through each unique drug in drug name, and create scatter plot w/ error bars
-for x in range(len(drugs)):
-
-    meta_line=metastatic.iloc[:, x]
-
-    marker_position = (x)%4
-    
-    plt.errorbar(timepoint, meta_line, yerr=standard_error, marker=markers[marker_position], linestyle='dashed')
-    
 #title
 plt.title('Metastatic Sites During Treatment')
-    
-#limits
-plt.xlim(min(timepoint)-5, max(timepoint)+5)
-
-#grids
-plt.grid(linestyle='dashed')
 
 #axes labels
 plt.xlabel('Treatment Duration (Days)')
 plt.ylabel('Number of Metastatic Sites')
 
-#anchors legend to outside of the chart
-plt.legend(bbox_to_anchor=(1.04,1), loc="upper left")
-
 #show plot
 plt.show()
-
-#need to figure out how to resize for better visibility
 ```
 
 
-![png](output_6_0.png)
+![png](output_7_0.png)
 
 
 # Scatter plot, survival rates for each treatment
 
 
 ```python
+# How can I make create_basic_scatter() more flexible so that I can easily input this?
+
 #Creates a groupby object for mean of tumor sizes by drug and timepoint, then converts to DF
 survival_group = trial_data.groupby(['Drug', 'Timepoint'])['Mouse ID'].count()
 survival = survival_group.to_frame()
@@ -220,7 +176,9 @@ timepoint = survival.index
 drugs = survival.columns
 
 #standard error calculation for error bar
-standard_error=survival.sem()
+standard_error=survival.sem()/25 * 100
+
+#Need to figure out a better way to do the above that's dynamic, only works right now because each trial has 25 mice
 
 #marker array to cycle through in loop for data point differentiation
 markers = ['o', 's', 'x', 'v']
@@ -234,7 +192,7 @@ for x in range(len(drugs)):
 
     marker_position = (x)%4
     
-    plt.errorbar(timepoint, surviving_mice/initial_mice * 100, yerr=standard_error, marker=markers[marker_position], linestyle='dashed')
+    plt.errorbar(timepoint, surviving_mice/initial_mice * 100, yerr=standard_error[x], marker=markers[marker_position], linestyle='dashed')
     
 #title
 plt.title('Mice Survival During Treatment')
@@ -254,19 +212,24 @@ plt.legend(bbox_to_anchor=(1.04,1), loc="upper left")
 
 #show plot
 plt.show()
-
-#need to figure out how to resize for better visibility
 ```
 
 
-![png](output_8_0.png)
+![png](output_9_0.png)
 
 
 # Bar chart, tumor volume percent change for each treatment
 
 
 ```python
-# Use the data from the first scatter chart on tumor decrease
+#This utilizes the same volume groupby object and DF as the first scatter chart.
+#Look into how to minimize this code redundancy.
+#Creates a groupby object for mean of tumor sizes by drug and timepoint, then converts to DF
+tumor_volume_group = trial_data.groupby(['Drug', 'Timepoint'])['Tumor Volume (mm3)'].mean()
+tumor_volume = tumor_volume_group.to_frame()
+
+#Re-arranging the format of the multi-index DF for insertion into a scatter plot
+tumor_volume = tumor_volume.unstack().transpose().reset_index(level=0, drop=True)
 
 #Blank list to track % change for each treatment
 tumor_changes = []
@@ -281,12 +244,10 @@ for x in range(len(drugs)):
     tumor_change = (final_tumor_size - initial_tumor_size) / initial_tumor_size*100
     tumor_changes.append(tumor_change)
     
-    if (tumor_change > 0):
-        
+    # adds to bar_colors list and provides a color based on positive/negative value
+    if (tumor_change > 0):     
         bar_colors.append('red')
-        
     else:
-        
         bar_colors.append('green')
 
 plt.title('Tumor Volume Changes')        
@@ -299,17 +260,26 @@ plt.xlabel('Drug')
 
 plt.ylabel('Percent Change in Tumor Volume')
 
-plt.bar(drugs, tumor_changes, color=bar_colors)
+plt.bar(drugs, tumor_changes, color=bar_colors, edgecolor='black')
 ```
 
 
 
 
-    <Container object of 10 artists>
+    <Container object of 4 artists>
 
 
 
 
-![png](output_10_1.png)
+![png](output_11_1.png)
 
-# UCBDataBootcampHW5
+
+
+```python
+#Creates a groupby object for mean of tumor sizes by drug and timepoint, then converts to DF
+tumor_volume_group = trial_data.groupby(['Drug', 'Timepoint'])['Tumor Volume (mm3)'].mean()
+tumor_volume = tumor_volume_group.to_frame()
+
+#Re-arranging the format of the multi-index DF for insertion into a scatter plot
+tumor_volume = tumor_volume.unstack().transpose().reset_index(level=0, drop=True)
+```
